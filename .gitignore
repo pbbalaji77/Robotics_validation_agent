@@ -1,0 +1,12 @@
+# OS metadata
+desktop.ini
+Thumbs.db
+.DS_Store
+
+# Temporary logs & reports
+*.log
+robosight_validation_report_*.html
+robosight_error_*.png
+robosight_metadata_*.json
+.system_generated/
+.gemini/

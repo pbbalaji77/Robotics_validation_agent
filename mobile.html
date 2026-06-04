@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RoboSight 3D: Mobile Robot Controller</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Orbitron:wght@700;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-darker: #060913;
+            --bg-dark: #0a0f1d;
+            --bg-panel: rgba(16, 23, 40, 0.7);
+            --border-color: rgba(38, 55, 87, 0.4);
+            --text-primary: #f0f4f9;
+            --text-secondary: #90a1b9;
+            --accent-blue: #00F0FF;
+            --accent-yellow: #FFD60A;
+            --accent-purple: #BD00FF;
+            --accent-green: #34C759;
+            --accent-red: #FF3B30;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-darker);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            justify-content: space-between;
+        }
+
+        header {
+            text-align: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 15px;
+        }
+
+        header h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.15rem;
+            letter-spacing: 2px;
+            font-weight: 900;
+        }
+
+        header h1 span {
+            color: var(--accent-blue);
+            text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+        }
+
+        /* Connection Selector Card */
+        .conn-section {
+            background: rgba(16, 23, 40, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .conn-label {
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .toggle-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-conn {
+            flex: 1;
+            background: rgba(16, 23, 40, 0.8);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-conn.active {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+            background: rgba(0, 240, 255, 0.05);
+        }
+
+        /* Robot Modes Control Grid */
+        .modes-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .mode-card {
+            background: rgba(16, 23, 40, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            height: 90px;
+        }
+
+        .mode-card h3 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.8rem;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+        }
+
+        .mode-card .icon-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.15);
+            transition: all 0.2s;
+        }
+
+        /* Mode-specific active highlights */
+        .mode-card.active-idle {
+            border-color: var(--accent-yellow);
+            background: rgba(255, 214, 10, 0.05);
+            box-shadow: 0 0 12px rgba(255, 214, 10, 0.15);
+        }
+        .mode-card.active-idle h3 { color: var(--accent-yellow); }
+        .mode-card.active-idle .icon-dot { background: var(--accent-yellow); box-shadow: 0 0 8px var(--accent-yellow); }
+
+        .mode-card.active-disinfect {
+            border-color: var(--accent-purple);
+            background: rgba(189, 0, 255, 0.05);
+            box-shadow: 0 0 12px rgba(189, 0, 255, 0.15);
+        }
+        .mode-card.active-disinfect h3 { color: #e566ff; }
+        .mode-card.active-disinfect .icon-dot { background: var(--accent-purple); box-shadow: 0 0 8px var(--accent-purple); }
+
+        .mode-card.active-follow {
+            border-color: var(--accent-blue);
+            background: rgba(0, 240, 255, 0.05);
+            box-shadow: 0 0 12px rgba(0, 240, 255, 0.15);
+        }
+        .mode-card.active-follow h3 { color: var(--accent-blue); }
+        .mode-card.active-follow .icon-dot { background: var(--accent-blue); box-shadow: 0 0 8px var(--accent-blue); }
+
+        .mode-card.active-manual {
+            border-color: var(--accent-green);
+            background: rgba(52, 199, 89, 0.05);
+            box-shadow: 0 0 12px rgba(52, 199, 89, 0.15);
+        }
+        .mode-card.active-manual h3 { color: var(--accent-green); }
+        .mode-card.active-manual .icon-dot { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+
+        /* Joystick Section */
+        .joystick-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            background: rgba(10, 15, 29, 0.4);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+
+        #joystick-canvas {
+            display: block;
+            touch-action: none;
+        }
+
+        .joystick-disabled-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(6, 9, 19, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            border-radius: 8px;
+            z-index: 10;
+            padding: 20px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* Footer info */
+        footer {
+            text-align: center;
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+            padding-top: 10px;
+        }
+
+        .devices-box {
+            border-top: 1px solid rgba(38, 55, 87, 0.2);
+            padding-top: 8px;
+            margin-top: 4px;
+        }
+
+        .scanner-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+            justify-content: center;
+        }
+
+        .scanner-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            animation: pulse-blue-scanner 1.5s infinite;
+        }
+
+        .device-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 85px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .device-list::-webkit-scrollbar {
+            width: 3px;
+        }
+        .device-list::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+
+        .device-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .device-item:hover, .device-item.selected {
+            background: rgba(0, 240, 255, 0.05);
+            border-color: rgba(0, 240, 255, 0.3);
+        }
+
+        .device-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            text-align: left;
+        }
+
+        .device-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .device-sub {
+            font-size: 0.6rem;
+            color: var(--text-secondary);
+        }
+
+        .device-status {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .device-status.connected {
+            color: var(--accent-green);
+        }
+        .device-status.available {
+            color: var(--accent-blue);
+        }
+        .device-status.saved {
+            color: var(--text-secondary);
+        }
+
+        @keyframes pulse-blue-scanner {
+            0% { transform: scale(0.9); opacity: 0.4; }
+            50% { transform: scale(1.2); opacity: 1.0; box-shadow: 0 0 6px var(--accent-blue); }
+            100% { transform: scale(0.9); opacity: 0.4; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>ROBOSIGHT <span>CONTROL</span></h1>
+    </header>
+
+    <!-- Connection Selectors -->
+    <div class="conn-section">
+        <span class="conn-label">Select Protocol</span>
+        <div class="toggle-row">
+            <button class="btn-conn active" id="btn-conn-wifi">
+                <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 21l-1.4-1.4c-1.6-1.6-3.8-2.6-6.6-2.6H2v-2h2c3.3 0 6.1 1.3 8 3.4 1.9-2.1 4.7-3.4 8-3.4h2v2h-2c-2.8 0-5 1-6.6 2.6L12 21zm0-6.8c-2.8-2.8-6.6-4.5-11-4.5V7.7c5 0 9.4 2 12.6 5.2C16.8 9.7 21.2 7.7 26.2 7.7v2c-4.4 0-8.2 1.7-11 4.5zM12 9C9.2 6.2 5.4 4.5 1 4.5V2.5c5 0 9.4 2 12.6 5.2C16.8 4.5 21.2 2.5 26.2 2.5v2c-4.4 0-8.2 1.7-11 4.5z"/></svg>
+                <span>WIFI</span>
+            </button>
+            <button class="btn-conn" id="btn-conn-bt">
+                <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.29L13 18.17v-3.76l1.88 1.88z"/></svg>
+                <span>BLUETOOTH</span>
+            </button>
+        </div>
+        
+        <!-- Available Devices Box -->
+        <div class="devices-box">
+            <div class="scanner-row" id="scanner-row">
+                <span class="scanner-dot"></span>
+                <span id="scanner-text" style="font-size: 0.7rem; color: var(--text-secondary);">Scanning WiFi networks...</span>
+            </div>
+            <div class="device-list" id="device-list" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- Mode Grids -->
+    <div class="modes-grid">
+        <div class="mode-card active-idle" id="card-idle" onclick="setMode('idle')">
+            <span class="icon-dot"></span>
+            <h3>IDLE</h3>
+        </div>
+        <div class="mode-card" id="card-disinfect" onclick="setMode('disinfect')">
+            <span class="icon-dot"></span>
+            <h3>DISINFECT</h3>
+        </div>
+        <div class="mode-card" id="card-follow" onclick="setMode('follow')">
+            <span class="icon-dot"></span>
+            <h3>FOLLOW</h3>
+        </div>
+        <div class="mode-card" id="card-manual" onclick="setMode('manual')">
+            <span class="icon-dot"></span>
+            <h3>MANUAL</h3>
+        </div>
+    </div>
+
+    <!-- Canvas Joystick -->
+    <div class="joystick-section">
+        <!-- Disabled state mask -->
+        <div class="joystick-disabled-overlay" id="joystick-overlay">
+            <p>Virtual Joystick deactivated.<br><span style="font-size: 0.7rem; color: var(--accent-blue);">Select MANUAL mode to enable steering.</span></p>
+        </div>
+        <canvas id="joystick-canvas" width="200" height="200"></canvas>
+    </div>
+
+    <footer>
+        STATUS: SYNCED | CHANNEL: robosight_sync
+    </footer>
+
+    <script>
+        // Init BroadcastChannel for synchronizing with the main dashboard
+        const syncChannel = new BroadcastChannel('robosight_mobile_sync');
+        
+        let activeMode = 'idle';
+        let connType = 'wifi';
+
+        const wifiDevices = [
+            { name: 'RoboSight_Bot_WiFi_5G', sub: 'Signal: 94% | IP: 192.168.1.120', status: 'connected' },
+            { name: 'RoboSight_Bot_WiFi_Backup', sub: 'Signal: 68% | IP: 192.168.1.121', status: 'available' },
+            { name: 'Office_Network_2G', sub: 'Signal: 45% | Saved', status: 'saved' }
+        ];
+
+        const btDevices = [
+            { name: 'RoboSight_BLE_v4', sub: 'RSSI: -42dBm | MAC: 00:1A:7D:DA:71:11', status: 'connected' },
+            { name: 'Robot_Chassis_BT', sub: 'RSSI: -65dBm | MAC: 00:1A:7D:DA:71:12', status: 'available' },
+            { name: 'UVC_Disinfection_Module_BLE', sub: 'RSSI: -80dBm | MAC: 00:1A:7D:DA:71:13', status: 'saved' }
+        ];
+
+        let selectedDevice = 'RoboSight_Bot_WiFi_5G';
+
+        function renderDevicesList() {
+            const listEl = document.getElementById('device-list');
+            if (!listEl) return;
+            listEl.innerHTML = '';
+            
+            const devices = connType === 'wifi' ? wifiDevices : btDevices;
+            
+            devices.forEach(dev => {
+                const item = document.createElement('div');
+                const isSelected = dev.name === selectedDevice;
+                item.className = `device-item ${isSelected ? 'selected' : ''}`;
+                item.onclick = () => selectDevice(dev.name);
+                
+                item.innerHTML = `
+                    <div class="device-info">
+                        <span class="device-name">${dev.name}</span>
+                        <span class="device-sub">${dev.sub}</span>
+                    </div>
+                    <span class="device-status ${isSelected ? 'connected' : dev.status}">${isSelected ? 'Connected' : dev.status}</span>
+                `;
+                listEl.appendChild(item);
+            });
+        }
+
+        function selectDevice(name) {
+            selectedDevice = name;
+            renderDevicesList();
+            sendSyncMessage('conn_device', name);
+        }
+
+        function triggerScan() {
+            const scanner = document.getElementById('scanner-row');
+            const scannerText = document.getElementById('scanner-text');
+            const listEl = document.getElementById('device-list');
+            
+            if (!scanner || !listEl) return;
+            
+            scanner.style.display = 'flex';
+            listEl.style.display = 'none';
+            scannerText.innerText = connType === 'wifi' ? 'Scanning WiFi networks...' : 'Searching Bluetooth LE devices...';
+            
+            // Set default selected device based on protocol
+            selectedDevice = connType === 'wifi' ? 'RoboSight_Bot_WiFi_5G' : 'RoboSight_BLE_v4';
+            sendSyncMessage('conn_device', selectedDevice);
+            
+            setTimeout(() => {
+                scanner.style.display = 'none';
+                listEl.style.display = 'flex';
+                renderDevicesList();
+            }, 1200);
+        }
+        
+        // Joystick State variables
+        const canvas = document.getElementById('joystick-canvas');
+        const ctx = canvas.getContext('2d');
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const baseRadius = 60;
+        const handleRadius = 25;
+        
+        let touchId = null;
+        let handleX = centerX;
+        let handleY = centerY;
+        let isDragging = false;
+
+        // Establish pairing on load
+        window.addEventListener('load', () => {
+            sendSyncMessage('ping', {});
+            drawJoystick();
+            triggerScan();
+            // Start heartbeat ping every 2 seconds
+            setInterval(() => {
+                sendSyncMessage('ping', {});
+            }, 2000);
+        });
+
+        function setMode(mode) {
+            activeMode = mode;
+            
+            // Remove active classes
+            document.querySelectorAll('.mode-card').forEach(card => {
+                card.className = 'mode-card';
+            });
+            
+            // Highlight selected card
+            const activeCard = document.getElementById(`card-${mode}`);
+            activeCard.classList.add(`active-${mode}`);
+            
+            // Toggle joystick overlay mask
+            const overlay = document.getElementById('joystick-overlay');
+            if (mode === 'manual') {
+                overlay.style.display = 'none';
+            } else {
+                overlay.style.display = 'flex';
+                resetJoystick();
+            }
+
+            // Dispatch command
+            sendSyncMessage('mode', mode);
+        }
+
+        // Connection Selector Toggles
+        document.getElementById('btn-conn-wifi').addEventListener('click', () => setConnType('wifi'));
+        document.getElementById('btn-conn-bt').addEventListener('click', () => setConnType('bluetooth'));
+
+        function setConnType(type) {
+            connType = type;
+            document.getElementById('btn-conn-wifi').className = type === 'wifi' ? 'btn-conn active' : 'btn-conn';
+            document.getElementById('btn-conn-bt').className = type === 'bluetooth' ? 'btn-conn active' : 'btn-conn';
+            sendSyncMessage('conn_type', type);
+            triggerScan();
+        }
+
+        function sendSyncMessage(type, value) {
+            syncChannel.postMessage({
+                source: 'mobile_controller',
+                type: type,
+                value: value,
+                timestamp: Date.now()
+            });
+        }
+
+        /* Canvas Touch Joystick Drawer and Event handlers */
+        
+        function drawJoystick() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw background circle base
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, baseRadius, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.lineWidth = 3;
+            ctx.fill();
+            ctx.stroke();
+            
+            // Draw guiding axes
+            ctx.beginPath();
+            ctx.moveTo(centerX - baseRadius, centerY);
+            ctx.lineTo(centerX + baseRadius, centerY);
+            ctx.moveTo(centerX, centerY - baseRadius);
+            ctx.lineTo(centerX, centerY + baseRadius);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Draw interactive handle knob
+            ctx.beginPath();
+            ctx.arc(handleX, handleY, handleRadius, 0, Math.PI * 2);
+            
+            const gradient = ctx.createRadialGradient(handleX, handleY, 2, handleX, handleY, handleRadius);
+            gradient.addColorStop(0, '#5eff89');
+            gradient.addColorStop(1, '#1b9c3e');
+            
+            ctx.fillStyle = activeMode === 'manual' ? gradient : 'rgba(94, 111, 136, 0.4)';
+            ctx.shadowColor = activeMode === 'manual' ? '#34c759' : 'transparent';
+            ctx.shadowBlur = activeMode === 'manual' ? 8 : 0;
+            ctx.fill();
+        }
+
+        function handleTouchStart(e) {
+            if (activeMode !== 'manual') return;
+            const touch = e.changedTouches[0];
+            const rect = canvas.getBoundingClientRect();
+            const tx = touch.clientX - rect.left;
+            const ty = touch.clientY - rect.top;
+            
+            // Check if touch is near base area
+            const dist = Math.sqrt(Math.pow(tx - centerX, 2) + Math.pow(ty - centerY, 2));
+            if (dist < baseRadius + 20) {
+                touchId = touch.identifier;
+                isDragging = true;
+                updateHandle(tx, ty);
+            }
+        }
+
+        function handleTouchMove(e) {
+            if (!isDragging) return;
+            for (let i = 0; i < e.touches.length; i++) {
+                if (e.touches[i].identifier === touchId) {
+                    const rect = canvas.getBoundingClientRect();
+                    const tx = e.touches[i].clientX - rect.left;
+                    const ty = e.touches[i].clientY - rect.top;
+                    updateHandle(tx, ty);
+                    break;
+                }
+            }
+        }
+
+        function handleTouchEnd(e) {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                if (e.changedTouches[i].identifier === touchId) {
+                    resetJoystick();
+                    break;
+                }
+            }
+        }
+
+        function updateHandle(tx, ty) {
+            let dx = tx - centerX;
+            let dy = ty - centerY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance > baseRadius) {
+                // Constrain handle to base circle boundary
+                handleX = centerX + (dx / distance) * baseRadius;
+                handleY = centerY + (dy / distance) * baseRadius;
+            } else {
+                handleX = tx;
+                handleY = ty;
+            }
+            
+            drawJoystick();
+            
+            // Map offsets to velocities
+            // Linear velocity v: forward is positive (upwards touch drag)
+            const v = -((handleY - centerY) / baseRadius);
+            // Angular velocity w: right turn is negative (or standard right hand rule)
+            const w = -((handleX - centerX) / baseRadius);
+            
+            sendSyncMessage('teleop', { linear: v * 0.8, angular: w * 1.2 });
+        }
+
+        function resetJoystick() {
+            touchId = null;
+            isDragging = false;
+            handleX = centerX;
+            handleY = centerY;
+            drawJoystick();
+            sendSyncMessage('teleop', { linear: 0.0, angular: 0.0 });
+        }
+
+        // Touch event bindings
+        canvas.addEventListener('touchstart', handleTouchStart, { passive: true });
+        window.addEventListener('touchmove', handleTouchMove, { passive: false });
+        window.addEventListener('touchend', handleTouchEnd, { passive: true });
+        
+        // Mouse fallback support for desktop simulation testing
+        canvas.addEventListener('mousedown', (e) => {
+            if (activeMode !== 'manual') return;
+            isDragging = true;
+            const rect = canvas.getBoundingClientRect();
+            updateHandle(e.clientX - rect.left, e.clientY - rect.top);
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const rect = canvas.getBoundingClientRect();
+            updateHandle(e.clientX - rect.left, e.clientY - rect.top);
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isDragging) resetJoystick();
+        });
+    </script>
+</body>
+</html>

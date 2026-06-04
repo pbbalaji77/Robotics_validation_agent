@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoboSight 3D: Robotics Detection & Validation Dashboard</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="./src/index.css">
+    
+    <!-- CDNs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+    <!-- Top Status Bar -->
+    <header class="app-header">
+        <div class="header-logo">
+            <svg class="icon animate-glow" viewBox="0 0 24 24" width="24" height="24">
+                <path fill="currentColor" d="M12 2L2 22h20L12 2zm0 3.6L18.4 18H5.6L12 5.6zm-1 5.4v4h2v-4h-2zm0-3v2h2V8h-2z"/>
+            </svg>
+            <h1>ROBOSIGHT <span class="accent-text">3D</span></h1>
+            <span class="badge badge-version">v1.2.0-beta</span>
+        </div>
+        
+        <div class="header-status">
+            <div class="status-indicator">
+                <span class="status-dot pulse-blue" id="mode-indicator-dot"></span>
+                <span class="status-label">Mode:</span>
+                <span class="status-value text-blue" id="mode-indicator-text">SIMULATION</span>
+            </div>
+            <div class="status-indicator">
+                <span class="status-dot pulse-red" id="conn-indicator-dot"></span>
+                <span class="status-label">ROS Bridge:</span>
+                <span class="status-value text-red" id="conn-indicator-text">DISCONNECTED</span>
+            </div>
+            <div class="status-indicator hidden-mobile">
+                <span class="status-label">FPS:</span>
+                <span class="status-value text-green" id="fps-counter">60</span>
+            </div>
+            <div class="status-indicator hidden-mobile">
+                <span class="status-label">Latency:</span>
+                <span class="status-value" id="latency-counter">0 ms</span>
+            </div>
+            <div class="status-indicator">
+                <span class="status-dot pulse-green" id="scrape-indicator-dot"></span>
+                <span class="status-label">Bot Scraping (CV):</span>
+                <span class="status-value text-green" id="scrape-indicator-text">SAFE</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace Container -->
+    <main class="app-container">
+        <!-- Sidebar Control Panel -->
+        <aside class="control-panel scrollbar-styled">
+            <div class="panel-section">
+                <h2>SYSTEM CONTROL</h2>
+                <div class="control-group">
+                    <label>OPERATION MODE</label>
+                    <div class="toggle-buttons">
+                        <button class="btn btn-toggle active" id="btn-mode-sim">SIMULATION</button>
+                        <button class="btn btn-toggle" id="btn-mode-live">LIVE ROS</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Connection Setup (ROS Only) -->
+            <div class="panel-section" id="section-ros-conn" style="display: none;">
+                <h2>ROS BRIDGE SETTINGS</h2>
+                <div class="control-group">
+                    <label for="ros-url">WEBSOCKET URL</label>
+                    <input type="text" id="ros-url" class="form-input" value="ws://localhost:9090">
+                </div>
+                <button class="btn btn-primary" id="btn-ros-connect">CONNECT TO BOT</button>
+                
+                <div class="collapsible-header" id="toggle-topic-mapping">
+                    <span>TOPIC MAPPINGS</span>
+                    <svg class="chevron-icon" viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                </div>
+                <div class="collapsible-content" id="topic-mapping-content">
+                    <div class="control-group">
+                        <label for="topic-imu">IMU TOPIC</label>
+                        <input type="text" id="topic-imu" class="form-input text-mono" value="/imu/data">
+                    </div>
+                    <div class="control-group">
+                        <label for="topic-rgb">CAMERA RGB</label>
+                        <input type="text" id="topic-rgb" class="form-input text-mono" value="/camera/rgb/image_raw/compressed">
+                    </div>
+                    <div class="control-group">
+                        <label for="topic-depth">DEPTH CAMERA</label>
+                        <input type="text" id="topic-depth" class="form-input text-mono" value="/camera/depth/image_raw">
+                    </div>
+                    <div class="control-group">
+                        <label for="topic-detect">DETECTIONS (2D/3D)</label>
+                        <input type="text" id="topic-detect" class="form-input text-mono" value="/detections">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Simulation Controls (Sim Only) -->
+            <div class="panel-section" id="section-sim-ctrl">
+                <h2>SIMULATOR PANEL</h2>
+                <div class="control-group">
+                    <label for="sim-scenario">SCENARIO SELECTOR</label>
+                    <select id="sim-scenario" class="form-select">
+                        <option value="office">Office Corridor Navigation</option>
+                        <option value="warehouse">Automated Warehouse Floor</option>
+                        <option value="laboratory">Human-Robot Lab Collaboration</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>SIMULATION PLAYBACK</label>
+                    <div class="action-row">
+                        <button class="btn btn-icon-label" id="btn-sim-play">
+                            <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+                            <span>PLAY</span>
+                        </button>
+                        <button class="btn btn-icon-label btn-secondary" id="btn-sim-reset">
+                            <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+                            <span>RESET</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="sim-speed">PLAYBACK SPEED: <span id="sim-speed-val">1.0x</span></label>
+                    <input type="range" id="sim-speed" min="0.1" max="3" step="0.1" value="1.0" class="form-range">
+                </div>
+                <div class="control-group">
+                    <label>DETECTOR SIMULATION</label>
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="sim-noise" checked>
+                        <label for="sim-noise">Introduce Spatial Noise</label>
+                    </div>
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="sim-dropouts">
+                        <label for="sim-dropouts">Simulate False Negatives</label>
+                    </div>
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="sim-fps-drop">
+                        <label for="sim-fps-drop">Simulate Processing Lag</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile App Connection Panel -->
+            <div class="panel-section">
+                <h2>MOBILE APP SYNC</h2>
+                <div class="control-group">
+                    <label>SYNC STATUS</label>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.8rem; background: rgba(16,23,40,0.8); border: 1px solid var(--border-color); padding: 8px 12px; border-radius: 4px;">
+                        <span class="status-dot pulse-red" id="mobile-indicator-dot" style="margin-right: 4px;"></span>
+                        <span id="mobile-indicator-text" class="text-mono" style="color: var(--text-secondary); font-size: 0.75rem;">DISCONNECTED</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label>CONNECTION TYPE</label>
+                    <div style="display: flex; gap: 8px; font-size: 0.75rem;" class="text-mono">
+                        <span id="mobile-conn-wifi" class="sensor-badge" style="opacity: 0.4; border-color: rgba(255,255,255,0.1); color: #fff;">WiFi</span>
+                        <span id="mobile-conn-bt" class="sensor-badge" style="opacity: 0.4; border-color: rgba(255,255,255,0.1); color: #fff;">Bluetooth</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label>BOT COMMAND MODE</label>
+                    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                        <span id="mode-badge-idle" class="sensor-badge text-mono" style="color: var(--accent-yellow); border-color: var(--accent-yellow); font-weight: bold; background: rgba(255, 214, 10, 0.1);">IDLE</span>
+                        <span id="mode-badge-disinfect" class="sensor-badge text-mono" style="opacity: 0.4;">DISINFECT</span>
+                        <span id="mode-badge-follow" class="sensor-badge text-mono" style="opacity: 0.4;">FOLLOW</span>
+                        <span id="mode-badge-manual" class="sensor-badge text-mono" style="opacity: 0.4;">MANUAL</span>
+                    </div>
+                </div>
+
+                <div class="control-group" style="margin-bottom: 12px;">
+                    <label for="local-ip-input">HOST IP FOR MOBILE PAIRING</label>
+                    <div style="display: flex; gap: 6px;">
+                        <input type="text" id="local-ip-input" class="form-input text-mono" placeholder="e.g. 192.168.1.10" style="font-size: 0.7rem; padding: 6px; flex: 1;">
+                        <button type="button" class="btn btn-small" id="btn-update-qr" style="padding: 6px 10px; font-family: 'Orbitron', sans-serif;">SET</button>
+                    </div>
+                    <span style="font-size: 0.55rem; color: #888; margin-top: 4px; display: block;">* Enter your computer's local WiFi IP to scan on a real mobile device.</span>
+                </div>
+
+                <div class="control-group">
+                    <label>PAIR DEVICE (SCAN QR)</label>
+                    
+                    <!-- QR Mode Tab Buttons -->
+                    <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+                        <button type="button" class="btn btn-small active" id="qr-tab-url" style="flex: 1; font-size: 0.65rem; padding: 6px 0; font-family: 'Orbitron', sans-serif;">URL LINK</button>
+                        <button type="button" class="btn btn-small btn-secondary" id="qr-tab-wifi" style="flex: 1; font-size: 0.65rem; padding: 6px 0; font-family: 'Orbitron', sans-serif;">WIFI HOTSPOT</button>
+                    </div>
+
+                    <!-- App URL Link QR View -->
+                    <div id="qr-container-url" style="display: flex; flex-direction: column; align-items: center; background: rgba(16,23,40,0.8); border: 1px solid var(--border-color); padding: 12px; border-radius: 4px; gap: 8px;">
+                        <a href="./mobile.html" target="_blank" title="Click to open Mobile App Controller Interface" id="qrcode-url-link" style="display: block; padding: 6px; background: white; border-radius: 4px; width: 102px; height: 102px;">
+                            <div id="qrcode-url"></div>
+                        </a>
+                        <span style="font-size: 0.65rem; color: var(--text-secondary); text-align: center;">Click/Scan to open Remote Web Controller</span>
+                    </div>
+
+                    <!-- WiFi Hotspot configuration QR View -->
+                    <div id="qr-container-wifi" style="display: none; flex-direction: column; align-items: center; background: rgba(16,23,40,0.8); border: 1px solid var(--border-color); padding: 12px; border-radius: 4px; gap: 8px;">
+                        <div style="padding: 6px; background: white; border-radius: 4px; width: 102px; height: 102px;" title="WiFi QR Code string: WIFI:S:RoboSight_Bot_WiFi_5G;T:WPA;P:robosight123;;">
+                            <div id="qrcode-wifi"></div>
+                        </div>
+                        <div style="font-size: 0.65rem; color: var(--text-secondary); text-align: center; width: 100%; display: flex; flex-direction: column; gap: 4px;">
+                            <span style="font-weight: bold; color: var(--accent-yellow);">SSID: <span class="text-mono" style="color: #fff;">RoboSight_Bot_WiFi_5G</span></span>
+                            <span>PASS: <span class="text-mono" style="color: #fff;">robosight123</span></span>
+                            <span style="font-size: 0.55rem; color: #888;">Scan QR with phone to auto-join WiFi Hotspot</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pipeline Parameters -->
+            <div class="panel-section">
+                <h2>PIPELINE RESOLUTION</h2>
+                <div class="control-group">
+                    <label for="param-cloud-density">POINT CLOUD DENSITY</label>
+                    <select id="param-cloud-density" class="form-select">
+                        <option value="low">Low (80x60 - 4.8k pts)</option>
+                        <option value="med" selected>Medium (160x120 - 19.2k pts)</option>
+                        <option value="high">High (320x240 - 76.8k pts)</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="param-mesh-mode">MESH GENERATION</label>
+                    <select id="param-mesh-mode" class="form-select">
+                        <option value="none">Disabled (Points Only)</option>
+                        <option value="wireframe" selected>Wireframe Delaunay Grid</option>
+                        <option value="shaded">Solid Shaded Surface</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="param-depth-thresh">DEPTH CUTOFF: <span id="param-depth-val">4.5m</span></label>
+                    <input type="range" id="param-depth-thresh" min="1.0" max="8.0" step="0.5" value="4.5" class="form-range">
+                </div>
+            </div>
+
+            <!-- Camera Intrinsics -->
+            <div class="panel-section">
+                <div class="collapsible-header" id="toggle-intrinsics">
+                    <span>CAMERA INTRINSICS</span>
+                    <svg class="chevron-icon" viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                </div>
+                <div class="collapsible-content" id="intrinsics-content">
+                    <div class="form-grid">
+                        <div class="control-group">
+                            <label for="cam-fx">fx (px)</label>
+                            <input type="number" id="cam-fx" class="form-input" value="380">
+                        </div>
+                        <div class="control-group">
+                            <label for="cam-fy">fy (px)</label>
+                            <input type="number" id="cam-fy" class="form-input" value="380">
+                        </div>
+                        <div class="control-group">
+                            <label for="cam-cx">cx (px)</label>
+                            <input type="number" id="cam-cx" class="form-input" value="160">
+                        </div>
+                        <div class="control-group">
+                            <label for="cam-cy">cy (px)</label>
+                            <input type="number" id="cam-cy" class="form-input" value="120">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Viewport Grid Dashboard -->
+        <section class="dashboard-grid">
+            
+            <!-- Panel 1: Live Video Camera Feed & Reprojection -->
+            <div class="grid-panel panel-camera">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="status-dot bg-cyan"></span>
+                        <h3>CAMERA RGB &amp; REPROJECTION</h3>
+                    </div>
+                    <div class="panel-actions">
+                        <span class="sensor-badge">Depth Alignment Active</span>
+                        <button class="btn-icon-only btn-maximize" title="Maximize Viewport">
+                            <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="panel-body relative-container">
+                    <canvas id="canvas-camera" class="canvas-viewport"></canvas>
+                    <!-- Overlaid status indicators -->
+                    <div class="viewport-overlay top-left">
+                        <span class="overlay-badge tag-cyan">RGB FEED</span>
+                        <span class="overlay-badge tag-magenta" id="detection-count">0 DETECTIONS</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel 2: Three.js Interactive 3D Spatial Viewport -->
+            <div class="grid-panel panel-three">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="status-dot bg-purple"></span>
+                        <h3>3D POINT CLOUD &amp; MESH RECONSTRUCTION</h3>
+                    </div>
+                    <div class="panel-actions">
+                        <button class="btn btn-small" id="btn-reset-camera">RESET CAMERA</button>
+                        <button class="btn btn-small btn-secondary" id="btn-toggle-grid">TOGGLE GRID</button>
+                        <button class="btn-icon-only btn-maximize" title="Maximize Viewport">
+                            <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="panel-body relative-container" id="three-container">
+                    <!-- Loading shader mask -->
+                    <div id="three-loading" class="viewport-loading" style="display: none;">
+                        <div class="loader"></div>
+                        <p>Initializing WebGL Context...</p>
+                    </div>
+                    <div class="viewport-overlay top-left">
+                        <span class="overlay-badge tag-purple">3D WORLD SPACE</span>
+                        <span class="overlay-badge tag-green" id="voxels-count">0 POINTS</span>
+                    </div>
+                    <div class="viewport-overlay bottom-right">
+                        <div class="control-hints">Left Drag: Rotate | Right Drag: Pan | Scroll: Zoom</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel 3: Real-Time Metrics Overview -->
+            <div class="grid-panel panel-metrics">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="status-dot bg-green"></span>
+                        <h3>VALIDATION METRICS</h3>
+                    </div>
+                    <div class="panel-actions">
+                        <span class="metric-window-tag">10s Sliding Window</span>
+                        <button class="btn btn-small btn-primary" id="btn-generate-report" style="padding: 2px 8px; font-size: 0.65rem; background: var(--accent-green); color: var(--bg-darker);">GENERATE REPORT</button>
+                        <button class="btn-icon-only btn-maximize" title="Maximize Viewport">
+                            <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="panel-body metrics-summary-grid">
+                    <!-- Gauge 1: F1 Score -->
+                    <div class="metric-card">
+                        <span class="metric-label">F1-SCORE</span>
+                        <div class="metric-gauge">
+                            <svg class="gauge-ring" viewBox="0 0 36 36">
+                                <path class="ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                <path class="ring-fill text-green" id="gauge-f1-path" stroke-dasharray="85, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                            </svg>
+                            <span class="gauge-value" id="val-f1">0.85</span>
+                        </div>
+                        <div class="metric-sub">Precision: <span id="val-precision">0.88</span> | Recall: <span id="val-recall">0.82</span></div>
+                    </div>
+
+                    <!-- Gauge 2: Mean 3D IoU -->
+                    <div class="metric-card">
+                        <span class="metric-label">MEAN 3D IoU</span>
+                        <div class="metric-gauge">
+                            <svg class="gauge-ring" viewBox="0 0 36 36">
+                                <path class="ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                <path class="ring-fill text-cyan" id="gauge-iou-path" stroke-dasharray="72, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                            </svg>
+                            <span class="gauge-value" id="val-iou">72%</span>
+                        </div>
+                        <div class="metric-sub">2D Overlap: <span id="val-iou-2d">84%</span></div>
+                    </div>
+
+                    <!-- Gauge 3: Centroid Localization Error -->
+                    <div class="metric-card">
+                        <span class="metric-label">3D POS DIST ERROR</span>
+                        <div class="error-metric-box">
+                            <div class="error-reading">
+                                <span class="error-num" id="val-distance-error">0.14</span>
+                                <span class="error-unit">meters</span>
+                            </div>
+                            <div class="error-bar-container">
+                                <div class="error-bar-fill" id="val-distance-bar" style="width: 28%"></div>
+                            </div>
+                        </div>
+                        <div class="metric-sub">Max Jitter: <span id="val-jitter">±0.03m</span></div>
+                    </div>
+
+                    <!-- Gauge 4: Bot Scraping / Collision Warning -->
+                    <div class="metric-card" id="scrape-metric-card">
+                        <span class="metric-label">CV BOT COLLISION</span>
+                        <div class="error-metric-box">
+                            <div class="error-reading">
+                                <span class="error-num text-green" id="val-scrape-count" style="font-weight: 900; font-size: 2rem;">0</span>
+                                <span class="error-unit" id="val-scrape-unit">SCRAPES</span>
+                            </div>
+                            <div style="font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; margin-top: 4px;">
+                                Min Distance: <span id="val-scrape-dist" style="color: #fff; font-weight: bold;">0.00m</span>
+                            </div>
+                        </div>
+                        <div class="metric-sub" id="scrape-hud-status">Status: <span class="text-green" style="font-weight: bold;">SAFE</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel 4: Timelines Historical Chart -->
+            <div class="grid-panel panel-chart">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="status-dot bg-orange"></span>
+                        <h3>HISTORICAL ACCURACY &amp; LATENCY TIMELINE</h3>
+                    </div>
+                    <div class="panel-actions">
+                        <button class="btn-icon-only btn-maximize" title="Maximize Viewport">
+                            <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="panel-body chart-wrapper">
+                    <canvas id="chart-timeline"></canvas>
+                </div>
+            </div>
+
+            <!-- Panel 5: Telemetry, IMU Orientation & Pose -->
+            <div class="grid-panel panel-imu">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="status-dot bg-yellow"></span>
+                        <h3>IMU DATA &amp; BOT POSE</h3>
+                    </div>
+                    <div class="panel-actions">
+                        <button class="btn-icon-only btn-maximize" title="Maximize Viewport">
+                            <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="panel-body imu-layout">
+                    <!-- Pitch/Roll/Yaw graphic dials -->
+                    <div class="imu-dials">
+                        <div class="imu-dial">
+                            <span class="dial-label">ROLL</span>
+                            <div class="dial-visual-wrap">
+                                <div class="dial-needle" id="needle-roll" style="transform: rotate(0deg)"></div>
+                                <span class="dial-value" id="val-roll">0.0°</span>
+                            </div>
+                        </div>
+                        <div class="imu-dial">
+                            <span class="dial-label">PITCH</span>
+                            <div class="dial-visual-wrap">
+                                <div class="dial-needle" id="needle-pitch" style="transform: rotate(0deg)"></div>
+                                <span class="dial-value" id="val-pitch">0.0°</span>
+                            </div>
+                        </div>
+                        <div class="imu-dial">
+                            <span class="dial-label">YAW (HEADING)</span>
+                            <div class="dial-visual-wrap">
+                                <div class="dial-needle" id="needle-yaw" style="transform: rotate(0deg)"></div>
+                                <span class="dial-value" id="val-yaw">0.0°</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- IMU raw vector readings -->
+                    <div class="imu-raw-readings text-mono">
+                        <div class="raw-row">
+                            <span class="raw-label">ACCEL X/Y/Z:</span>
+                            <span class="raw-data" id="val-accel">0.02, -0.01, 9.81 m/s²</span>
+                        </div>
+                        <div class="raw-row">
+                            <span class="raw-label">GYRO X/Y/Z:</span>
+                            <span class="raw-data" id="val-gyro">0.00, 0.00, 0.01 rad/s</span>
+                        </div>
+                        <div class="raw-row">
+                            <span class="raw-label">ODOMETRY POSE:</span>
+                            <span class="raw-data" id="val-pose">X: 0.00m, Y: 0.00m, Z: 0.00m</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel 6: Pipeline Flow Visualization -->
+            <div class="grid-panel panel-flow">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="status-dot bg-red"></span>
+                        <h3>REAL-TIME DATA PROCESSING PIPELINE</h3>
+                    </div>
+                    <div class="panel-actions">
+                        <button class="btn-icon-only btn-maximize" title="Maximize Viewport">
+                            <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="panel-body pipeline-flow-container">
+                    <div class="pipeline-flow">
+                        <!-- Node 1 -->
+                        <div class="flow-node active" id="node-topics">
+                            <div class="node-icon">
+                                <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M19 15v4H5v-4H3v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4h-2M12 3L1 12h3v6h6v-4h4v4h6v-6h3L12 3z"/></svg>
+                            </div>
+                            <span class="node-title">RAW TOPICS</span>
+                            <span class="node-rate" id="node-topics-rate">30 Hz</span>
+                        </div>
+                        <div class="flow-arrow active" id="arrow-1">&#10142;</div>
+
+                        <!-- Node 2 -->
+                        <div class="flow-node" id="node-cloud">
+                            <div class="node-icon">
+                                <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95A5.469 5.469 0 0 1 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/></svg>
+                            </div>
+                            <span class="node-title">POINT CLOUD</span>
+                            <span class="node-rate" id="node-cloud-rate">Idle</span>
+                        </div>
+                        <div class="flow-arrow" id="arrow-2">&#10142;</div>
+
+                        <!-- Node 3 -->
+                        <div class="flow-node" id="node-mesh">
+                            <div class="node-icon">
+                                <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                            </div>
+                            <span class="node-title">3D MESH</span>
+                            <span class="node-rate" id="node-mesh-rate">Idle</span>
+                        </div>
+                        <div class="flow-arrow" id="arrow-3">&#10142;</div>
+
+                        <!-- Node 4 -->
+                        <div class="flow-node" id="node-reprojection">
+                            <div class="node-icon">
+                                <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
+                            </div>
+                            <span class="node-title">REPROJECTION</span>
+                            <span class="node-rate" id="node-reproj-rate">Idle</span>
+                        </div>
+                        <div class="flow-arrow" id="arrow-4">&#10142;</div>
+
+                        <!-- Node 5 -->
+                        <div class="flow-node" id="node-map">
+                            <div class="node-icon">
+                                <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>
+                            </div>
+                            <span class="node-title">MAP RECONSTRUCTION</span>
+                            <span class="node-rate" id="node-map-rate">Idle</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel 7: False Detection Capture Gallery -->
+            <div class="grid-panel panel-gallery">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="status-dot bg-red"></span>
+                        <h3>FALSE DETECTION GALLERY &amp; LOGS</h3>
+                    </div>
+                    <div class="panel-actions">
+                        <div class="checkbox-row" style="margin-top: 0;">
+                            <input type="checkbox" id="chk-auto-capture" checked>
+                            <label for="chk-auto-capture" style="font-size: 0.65rem !important;">Auto-Capture</label>
+                        </div>
+                        <button class="btn btn-small btn-secondary" id="btn-clear-gallery">CLEAR LOGS</button>
+                        <button class="btn-icon-only btn-maximize" title="Maximize Viewport">
+                            <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="panel-body gallery-container scrollbar-styled" id="gallery-container">
+                    <div class="gallery-empty-state" id="gallery-empty">
+                        <svg viewBox="0 0 24 24" width="24" height="24" style="color: var(--text-muted);"><path fill="currentColor" d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                        <p>No false detections captured yet.</p>
+                        <span>Enable Auto-Capture to record model anomalies automatically.</span>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- Main Entry Module JS -->
+    <script type="module" src="./src/main.js"></script>
+</body>
+</html>
